@@ -1,3 +1,6 @@
+export DB_TYPE=sqlite3
+export DB_CONNECTION_STRING=composer.db
+
 .PHONY: build-backend
 build-backend:
 	go build -o ./bin/composer
