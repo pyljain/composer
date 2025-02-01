@@ -305,6 +305,41 @@ func createMessage(c echo.Context) error {
 		return err
 	}
 
+	// Find all edit tags using regex
+	editRegex := regexp.MustCompile(`(?s)<edit>(.*?)</edit>`)
+	textToReplaceRegex := regexp.MustCompile(`(?s)<textToReplace>(.*?)</textToReplace>`)
+	replacementRegex := regexp.MustCompile(`(?s)<replacement>(.*?)</replacement>`)
+	explanationRegex := regexp.MustCompile(`(?s)<explanation>(.*?)</explanation>`)
+
+	editBlocks := editRegex.FindAllStringSubmatch(result.Choices[0].Content, -1)
+	for _, eb := range editBlocks {
+		textToReplaceBlock := textToReplaceRegex.FindStringSubmatch(eb[1])
+		replacementBlock := replacementRegex.FindStringSubmatch(eb[1])
+		if textToReplaceBlock != nil && replacementBlock != nil {
+			previousArtifact = strings.ReplaceAll(previousArtifact, textToReplaceBlock[1], replacementBlock[1])
+			streamMessage.Artifact = previousArtifact
+			err := json.NewEncoder(w).Encode(streamMessage)
+			if err != nil {
+				return err
+			}
+			w.Write([]byte("\r\n"))
+			w.Flush()
+		}
+	}
+
+	log.Printf("result is %s", result.Choices[0].Content)
+	explanationBlock := explanationRegex.FindStringSubmatch(result.Choices[0].Content)
+	log.Printf("explanation block is %s", explanationBlock)
+	if len(explanationBlock) > 1 {
+		streamMessage.Message = explanationBlock[1]
+		err := json.NewEncoder(w).Encode(streamMessage)
+		if err != nil {
+			return err
+		}
+		w.Write([]byte("\r\n"))
+		w.Flush()
+	}
+
 	err = database.InsertChatMessage(&models.ChatMessage{
 		SessionID: sessionID,
 		Role:      "ai",
@@ -316,7 +351,7 @@ func createMessage(c echo.Context) error {
 		return err
 	}
 
-	log.Printf("response from LLM is %+s", result.Choices[0].Content)
+	// log.Printf("response from LLM is %+s", result.Choices[0].Content)
 	return nil
 }
 
